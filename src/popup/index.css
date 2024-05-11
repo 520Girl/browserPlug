@@ -1,0 +1,89 @@
+.x-container{
+    height: 200px;
+    width: 300px;
+}
+.n-split .n-split-pane-2{
+    overflow: auto;
+}
+sup{
+    font-size: 10px;
+    display: flex;
+    align-items: flex-end;
+    align-content: flex-end;
+    height: 100%;
+}
+.x-switch-container{
+    padding-top: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-start;
+    width: 100%;
+    box-sizing: border-box;
+}
+.x-switch{
+    height: 20px;
+    padding-right: 5px;
+}
+.x-switch-icon{
+    padding-right: 10px;
+    height: 20px;
+}
+.x-switch-text{
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    padding-left: 3px;
+}
+.x-options{
+    gap: 0;
+    padding: 5px;
+    white-space: nowrap;
+    height: 30px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+.x-options-item{
+    font-size:12px;
+    padding-right: 15px;
+    cursor: pointer;
+}
+.x-options-item .x-options-icon:hover{
+    transform: rotate(180deg)!important;
+}
+.x-options-icon{
+    transition: transform 0.3s ease!important;
+    vertical-align: sub;
+}
+.Weather{
+    padding-right: 0;
+    display: flex;
+    align-items: center;
+}
+.Weather-icon:hover{
+    transform: scale(1.3)!important;
+}
+.Weather-icon{
+    font-size: 26px!important;
+    display: block;
+    transition: transform 0.3s ease!important;
+}
+
+.Weather-text{
+    font-size: 10px;
+    font-weight: 500;
+    display: block;
+}
+.scroll-container {
+    min-width: 150px;
+    position: relative;
+    top: 0;
+}
+.scroll-item{
+    transform: translateY(100%); /* 设置初始和最终状态 */
+    transition: transform 1s; /* 设置过渡效果 */
+white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
