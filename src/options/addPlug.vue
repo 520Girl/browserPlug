@@ -1,5 +1,5 @@
 <template>
-  <n-grid  cols="2 750:3 1000:3 1200:4 1400:5 1660:6" :y-gap="20" x-gap="10">
+  <n-grid  cols="1 640:2 750:3 1000:3 1200:4 1400:5 1660:6" :y-gap="20" x-gap="10">
     <n-grid-item class="item" v-for="(item, key) in plugList" :key="key">
       <n-thing class="item-content" style="">
           <template v-if="avatar" #avatar>
@@ -50,7 +50,7 @@
             </n-popconfirm>
           </template>
           <template v-if="description" #description>
-            <span style="color: #888;font-size: 12px;">{{item.tips}}</span>
+            <span class="description" >{{item.tips}}</span>
           </template>
           <template v-if="action" #action>
             <n-space align="baseline" :wrap="false">
@@ -107,18 +107,16 @@
             :collapsed-width="64"
             :collapsed-icon-size="22"
             :options="menuOptions"
-            default-value="'content-script.js'"
             v-model:value="contentClick"
             :render-label="renderMenuLabel"
             :render-icon="renderMenuIcon"
             :expand-icon="expandIcon"
-            :on-update:value="onUpdated"
+            @update:value="onUpdated"
 
         />
       </n-layout-sider>
       <n-layout>
         <Codemirror
-            v-if="contentClick === 'content-script.js'"
             v-model:value="code"
             :options="cmOptions"
             :autofocus="true"
@@ -182,7 +180,7 @@ import {
   LogoCss3 as CssLogo,AlbumsSharp,
   BookmarkOutline, CaretDownOutline
 } from '@vicons/ionicons5'
-import { h,ref,defineComponent,onMounted,onUnmounted,watch,getCurrentInstance,reactive  } from 'vue'
+import { h,ref,defineComponent,onMounted,onUnmounted,watch,getCurrentInstance,reactive,toRefs   } from 'vue'
 import CodeModal from "~options/CodeModal.vue";
 import {Tpl} from './addPlug.js'
 import {devTool} from '~background/handleTools'
@@ -199,7 +197,8 @@ function renderIcon(icon) {
 let menuOptions: MenuOption[] = [
   {
     label: 'content-script.js',
-    key: 'content-script.js'
+    key: 'content-script.js',
+    disabled: false
   }
 ]
 export default defineComponent({
@@ -228,7 +227,7 @@ export default defineComponent({
     const code = ref(Tpl)
     const {message} = createDiscreteApi(["message"])
     let title = ref('编辑文件')
-    const contentClick=ref('content-script.js')
+    const contentClick=ref('')
     const cmOptions: EditorConfiguration = {
       mode: "text/javascript",
       lineNumbers: true
@@ -236,23 +235,9 @@ export default defineComponent({
     //! 1.编辑插件 创建插件 true 编辑 false 创建
     let isEdit = false
     const handleEdit = (status: boolean, item: any,key:string) => {
-      // chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-      //   if (!tabs[0] && tabs[0].status === 'complete') return false;
-      //   const currentTabId = tabs[0].id;
-      //   let request = {
-      //     type: 'request-monkey-start',
-      //     params:{
-      //       allFrames: true,
-      //       tabId:currentTabId,
-      //       url:tabs[0].url,
-      //       tool:{}
-      //     }
-      //   };
-      //   chrome.runtime.sendMessage(request,(res)=>{
-      //     console.log('获取插件信息 注入的回调函数',res)
-      //   });
-      // });
       if (status){
+        menuOptions.splice(0, menuOptions.length);
+        console.log('编辑插件',menuOptions)
         isEdit = true
         title.value = `编辑文件 ${item.name}`
         //todo 1.1 data 是插件信息,打开模态框 将原始数据备份到 PlugData 中
@@ -264,58 +249,55 @@ export default defineComponent({
           PlugData.value.devToolMap = res
           ////todo 1.2 文件类型同步
           if (PlugData.value.devToolMap.MScript.length > 0) {
-            menuOptions =[]
             //todo 1.3 匹配默认选中文件
-            const  findContentFile=PlugData.value.devToolMap.MScript.find(item => {
-              if (item.filename === 'content-script.js'){
-                contentClick.value = 'content-script.js'
+            PlugData.value.devToolMap.MScript.some(item => {
+              if (item.status !== 1){
+                contentClick.value = item.filename
                 code.value = item.content
+                return true
               }
             })
-            if (!findContentFile){
-              contentClick.value = PlugData.value.devToolMap.MScript[0].filename
-              code.value = PlugData.value.devToolMap.MScript[0].content
-            }
           }
           //todo 1.4 配置menu 选项
           PlugData.value.devToolMap.MScript.forEach(item => {
             menuOptions.push({
               label: item.filename,
-              key: item.filename
+              key: item.filename,
+              disabled: item.status !== 1 ? false : true
             })
           })
           show.value = true
           //todo 1.5 code不符合要求
           const matches = ruleCode(code.value)
-          if (!matches){
+          const optionsMenu = PlugData.value.devToolMap.MScript.find(item => item.filename === contentClick.value)
+          if (!matches && optionsMenu.status === 0){
             message.error('内容不符合规范，将不会保存！！',{ duration: 1000 })
             return
           }
         })
         PlugData.value.id = key
-        console.log('修改数据',PlugData.value)
-        console.log('修改文件menu',menuOptions,contentClick.value)
       }else{
         isEdit = false
         title.value = '创建文件'
         PlugData.value.devToolMap = devToolMap.navaiVip
-        PlugData.value.devToolMap.MScript =[{filename:'content-script.js',content:Tpl}]
+        PlugData.value.devToolMap.MScript =[{filename:'content-script.js',content:Tpl,status:0}]
         //todo 1.6 code不符合要求
         code.value = Tpl
         const matches = ruleCode(code.value)
+        contentClick.value = 'content-script.js'
         if (!matches){
           message.error('内容不符合规范，将不会保存！！',{ duration: 600 })
           return
         }
         show.value = true
-        console.log('初始化创建数据',PlugData.value)
       }
 
     }
 
     //!2. 检测切换 menu
     const onUpdated =(key,item)=>{
-      code.value = item.content
+      code.value = PlugData.value.devToolMap.MScript.find(item => item.filename === key)?.content || ''
+      contentClick.value = key
     }
     //!3 修改文件后 自动保存到本地
     //todo 3.1自动保存
@@ -323,11 +305,128 @@ export default defineComponent({
     const autoSave = (val: string) => {
       clearTimeout(timeout);
       timeout = setTimeout(() => {
-        saveToLocalStorage(val)
+        saveToLocalStorage2(val,contentClick.value)
+
       }, 1000);
     }
     //todo 3.2 将数据保存到本地内存中
-    const saveToLocalStorage = (val: string) => {
+    const saveToLocalStorage2 = (val: string,filename:string) => {
+      //todo 3.3 匹配 code 中的内容 @id @name @url-pattern等
+      let obj = {devToolMap:{MPattern:[],MName:'',MScript:[],Nrequirejs:[],MRefresh:0}}
+      const matches = ruleCode(val)
+      const optionsMenu = PlugData.value.devToolMap.MScript.find(item => item.filename === filename)
+      console.log('正在被操作的文件',optionsMenu)
+      switch (optionsMenu.status) {
+        case 1: // 表示用过文件的方式进行注入
+          message.error('该文件不能操作',{ duration: 600 })
+          break;
+        case 0: // 表示使用代码的形式进行注入
+          if (matches){
+            const content = matches[1].trim();
+            const idMatch = /@id\s+(.+)/.exec(content);
+            const nameMatch = /@name\s+(.+)/.exec(content);
+            let urlPatternMatch: RegExpExecArray | string = /@url-pattern\s+(.+)/.exec(content);
+            const enableMatch = /@enable\s+(.+)/.exec(content);
+            let requireJsMatch: RegExpExecArray | string = /@require-js\s+(.+)/.exec(content);
+            const autoRefreshMatch = /@auto-refresh\s+(.+)/.exec(content);
+            const tipsMatch = /@tips\s+(.+)/.exec(content);
+            const updatedMatch = /@updated\s+(.+)/.exec(content);
+            // 提取 @id 和 @name 的值
+            const id = idMatch ? idMatch[1].trim() : '';
+            const tips = tipsMatch ? tipsMatch[1].trim() : '';
+            const name = nameMatch ? nameMatch[1].trim() : '';
+            let urlPattern = [];
+            if (urlPatternMatch) {
+              urlPatternMatch = urlPatternMatch[1].replace(/'/g, '"');
+              urlPattern = JSON.parse(urlPatternMatch);
+            }
+            // const urlPattern = urlPatternMatch ? JSON.parse(urlPatternMatch[1])  : [];
+            const enable = enableMatch ? enableMatch[1].trim() : '';
+            let requireJs = []
+            if (requireJsMatch){
+              requireJsMatch = requireJsMatch[1].replace(/'/g, '"');
+              requireJs = JSON.parse(requireJsMatch);
+            }
+            const autoRefresh = autoRefreshMatch ? autoRefreshMatch[1].trim() : '';
+            const updated = updatedMatch ? updatedMatch[1].trim() : '';
+            obj.name = name
+            obj.devToolMap.MName = name
+            obj.devToolMap.MPattern = urlPattern
+            obj.devToolMap.Nrequirejs = requireJs
+            obj.devToolMap.MRefresh = parseInt(autoRefresh)
+            obj.installed = !!enable
+            obj.updated = updated
+            obj.tips = tips
+            obj._id = id
+            console.log('正在保存的数据',obj.devToolMap)
+            //todo 3.4 更新 or 创建
+            const basefield = {_devTool:true,noPage:true,menu:false,type:'plug',contentScriptJs:true,contentScriptCss:false,systemInstalled:false}
+
+            if (isEdit){
+              console.log('正在编辑的数据',PlugData.value)
+              if (PlugData.value.id){
+                PlugData.value.devToolMap.MScript.some((item,index) => {
+                  if (item.filename === filename){
+                    PlugData.value.devToolMap.MScript[index].content = val
+                    return true
+                  }
+                })
+                console.log('修改完成 还未传入内存！！！',PlugData.value.id,PlugData.value)
+                devTool.update(PlugData.value.id,PlugData.value).then((res: any) => {
+                  props.plugList[PlugData.value.id] = PlugData.value
+                  console.log('修改完成 传入内存！！！',res,PlugData.value.id,PlugData.value)
+                  message.success('修改成功',{ duration: 600 })
+                  return
+                })
+              }else{
+                message.error('id 出问题',{ duration: 600 })
+              }
+
+            }else{
+              obj.devToolMap.MScript = [
+                {
+                  filename: contentClick.value,
+                  content: val,
+                  status: 0
+                }
+              ]
+              obj= {...basefield,...obj}
+              if (obj._id){
+                devTool.update(obj._id,obj).then((res: any) => {
+                  props.plugList[obj._id] = obj
+                  message.success('创建成功',{ duration: 600 })
+                })
+              }else{
+                message.error('id 出问题',{ duration: 600 })
+              }
+            }
+          }else {
+            message.error('内容不符合规范，将不会保存！！',{ duration: 600 })
+            console.log('未找到匹配内容',PlugData);
+          }
+          break;
+        case 2:// 表示通过代码 和 文件的方式进行注入
+          if (PlugData.value.id){
+            PlugData.value.devToolMap.MScript.some((item,index) => {
+              if (item.filename === filename){
+                PlugData.value.devToolMap.MScript[index].content = val
+                return true
+              }
+            })
+            devTool.update(PlugData.value.id,PlugData.value).then((res: any) => {
+              props.plugList[PlugData.value.id] = PlugData.value
+              message.success('修改成功',{ duration: 600 })
+            })
+          }else{
+            message.error('id 出问题',{ duration: 600 })
+          }
+          break;
+          default:
+            message.error('未知状态',{ duration: 600 })
+            break;
+      }
+    }
+    const saveToLocalStorage = (val: string,filename:string) => {
       //todo 3.3 匹配 code 中的内容 @id @name @url-pattern等
       let obj = {devToolMap:{MPattern:[],MName:'',MScript:[],Nrequirejs:[],MRefresh:0}}
       const matches = ruleCode(val)
@@ -368,10 +467,12 @@ export default defineComponent({
         obj.updated = updated
         obj.tips = tips
         obj._id = id
+        console.log('保存的数据',obj.devToolMap)
         obj.devToolMap.MScript = [
           {
             filename: contentClick.value,
-            content: val
+            content: val,
+            status: val ? 0 : 1
           }
         ]
         //todo 3.4 更新 or 创建
@@ -494,7 +595,7 @@ export default defineComponent({
       contentClick,
       bodyStyle: {
         width: '80%',
-        height: '80vh'
+        'min-height': '80vh'
       },
       menuOptions,
       renderMenuLabel (option: MenuOption) {
@@ -505,7 +606,6 @@ export default defineComponent({
         //       option.label as string
         //   )
         // }
-        console.log(option)
         return option.label as string
       },
       renderMenuIcon (option: MenuOption) {
@@ -542,7 +642,7 @@ export default defineComponent({
   vertical-align: middle;
 }
 .n-layout--static-positioned{
-  height: 100%;
+  height: 80vh;
 }
 >>>.CodeMirror-gutters{
   left: 0!important;
@@ -553,5 +653,17 @@ export default defineComponent({
 >>>.CodeMirror-gutter-wrapper{
   left:-38.5px!important;
 }
-
+.description{
+  color: #888;font-size: 12px;
+  display: -webkit-box; /* 将元素作为弹性伸缩盒子模型显示 */
+  -webkit-box-orient: vertical; /* 设置弹性伸缩盒的子元素垂直排列 */
+  overflow: hidden; /* 隐藏溢出的内容 */
+  -webkit-line-clamp: 2; /* 限制显示的行数 */
+  min-height: 40px;
+}
+>>>.n-thing-header__title{
+  white-space: nowrap; /* 禁止换行 */
+  overflow: hidden; /* 隐藏溢出部分的文本 */
+  text-overflow: ellipsis;
+}
 </style>

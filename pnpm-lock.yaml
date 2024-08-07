@@ -26,6 +26,9 @@ dependencies:
   hls.js:
     specifier: ^1.5.8
     version: 1.5.8
+  jsqr:
+    specifier: ^1.4.0
+    version: 1.4.0
   naive-ui:
     specifier: ^2.38.1
     version: 2.38.1(vue@3.4.15)
@@ -4314,6 +4317,10 @@ packages:
       JSV: 4.0.2
       chalk: 2.4.2
       underscore: 1.13.6
+    dev: false
+
+  /jsqr@1.4.0:
+    resolution: {integrity: sha512-dxLob7q65Xg2DvstYkRpkYtmKm2sPJ9oFhrhmudT1dZvNFFTlroai3AWSpLey/w5vMcLBXRgOJsbXpdN9HzU/A==}
     dev: false
 
   /keyv@4.5.4:

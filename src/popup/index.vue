@@ -26,16 +26,18 @@
             <div class="" @click="openUrl" style="cursor: pointer;">{{manifest.name}}</div>
             <n-skeleton v-if="skeletonStatus" width="67px" height="24px" round   />
             <div class="Weather" v-else>
-
-              <n-icon size="15" class=" Weather-icon">
-                <weather-icon :type="weather.type" />/>
+              <n-icon v-if="weather.success" size="15" class=" Weather-icon">
+                <weather-icon :type="weather.type" />
               </n-icon>
               <div style="min-width: 20px;text-align: center;">
                 <span style="display: block;" class="Weather-text">
-                  {{ipaddress.length > 12 ? weather.city : 'Loading...'}}
+                  {{ipaddress.ip.length > 19 ? weather.city : ipaddress.ip}}
                 </span>
-                <n-gradient-text :type="weatherStatus  ? 'error' : 'success'" class="Weather-text">
+                <n-gradient-text v-if="weather.success" :type="weatherStatus  ? 'error' : 'success'" class="Weather-text">
                   {{weather.high}}~{{weather.low}}
+                </n-gradient-text>
+                <n-gradient-text v-else type="success" class="Weather-text">
+                  {{ipaddress.info.country}}-{{ipaddress.info.prov}}-{{ipaddress.info.city}}
                 </n-gradient-text>
               </div>
 
@@ -68,7 +70,6 @@
           </n-scrollbar>
 
         </template>
-
       </n-split>
       <n-divider dashed style="margin: 0 0;background-color: #000000;" ></n-divider>
       <n-flex class="x-options" align="center" justify="left" :wrap="false" :size="[8, 3]" >
@@ -133,7 +134,7 @@
       let valueState = reactive({})
       const splitWidth = ref(100)
       const sliderItems = ref([]); // 新闻滚动的内容数组
-      const weather = ref({high:'29°C',type:'晴',low:'19°C',city:''}); // 天气
+      const weather = ref({high:'29°C',type:'晴',low:'19°C',city:'',success:false}); // 天气
       const ipaddress = ref({}); // ip
       const weatherStatus = ref(false); // 天气情况
       let skeletonStatus = ref(true); // 骨架屏开关
@@ -173,7 +174,7 @@
             .then(response => response.json())
             .then(data => {
               if (data.success){
-                ipaddress.value = data.ip;
+                ipaddress.value = data;
               }
             })
             .catch(error => {
@@ -183,8 +184,10 @@
         await fetch('https://api.vvhan.com/api/weather')
             .then(response => response.json())
             .then(data => {
+              console.log(data)
               if (data.success){
                 weather.value = data.data;
+                weather.value.success = true;
                 weather.value.city = data.city;
                 const match = weather.value.high.match(/\d+/);
                 const number = match ? match[0] : null;

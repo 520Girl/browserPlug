@@ -29,8 +29,8 @@ export const inject=(tabId,codeConfig,callback)=>{
                 // 给js方法注入 错误处理
                 codeConfig.code = `try{${codeConfig.code}}catch(e){}`;
                 // 注入脚本, 如果是文件直接注入文件，如果是代码直接注入代码
-                //文件注入
-                if (codeConfig.file  && codeConfig.files.length){
+                //文件注入 当文件 长度大于0 时，可能同时导入js文件 和 js代码
+                if (codeConfig.files.length){
                     if(codeConfig.files.join(',').indexOf('.css') > -1) {
                         //css
                         chrome.scripting.insertCSS({
@@ -40,18 +40,22 @@ export const inject=(tabId,codeConfig,callback)=>{
                             callback && callback.apply(this, arguments);
                         });
                     }else{
-                        //js
+                        //js 同时导入js 文件 和 js代码 是 _injectContentScripts 这个方法
                         chrome.scripting.executeScript({
                             target: target,
                             files: codeConfig.files
                         }, function () {
-                            chrome.scripting.executeScript({
-                                target:target,
-                                func: function(code){try{evalCore.getEvalInstance(window)(code)}catch(x){}},
-                                args: [codeConfig.js]
-                            }, function () {
+                            if(codeConfig.js){
+                                chrome.scripting.executeScript({
+                                    target:target,
+                                    func: function(code){try{evalCore.getEvalInstance(window)(code)}catch(x){}},
+                                    args: [codeConfig.js]
+                                }, function () {
+                                    callback && callback.apply(this, arguments);
+                                });
+                            }else{
                                 callback && callback.apply(this, arguments);
-                            });
+                            }
                         });
                     }
                 //代码注入

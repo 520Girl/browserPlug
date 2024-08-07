@@ -15,14 +15,15 @@ let blacklist = [
  * 动态运行工具
  * @param configs
  * @config tool 工具名称
+ * @config page 页面地址 ，当存在这个时，直接跳转到这个页面即可
  * @config withContent 默认携带的内容
  * @config query 请求参数
  * @config noPage 无页面模式
  * @constructor
  */
 chrome.DynamicToolRunner = async function (configs) {
-
-    let tool = configs.tool || configs.page;
+    console.log('configs',configs);
+    const {tool,page} = configs;
     let withContent = configs.withContent;
     let activeTab = null;
     let query = configs.query;
@@ -57,9 +58,9 @@ chrome.DynamicToolRunner = async function (configs) {
             let isOpened = false;
             let tabId;
 
-            // 允许在新窗口打开
+            //禁止在新选项卡中打开 false:允许 true:禁止 找相同页面打开
             if (opts === true) {
-                let reg = new RegExp("^chrome.*\\/" + tool + "\\/index.html" + (query ? "\\?" + query : '') + "$", "i");
+                let reg = tool ? new RegExp("^chrome.*\\/" + tool + "\\/index.html" + (query ? "\\?" + query : '') + "$", "i") : new RegExp("^chrome.*\\/tabs/" + page + ".html" + (query ? "\\?" + query : '') + "$", "i")
                 console.log('reg',reg);
                 for (let i = 0, len = tabs.length; i < len; i++) {
                     if (reg.test(tabs[i].url)) {
@@ -72,7 +73,7 @@ chrome.DynamicToolRunner = async function (configs) {
 
             if (!isOpened) {
                 chrome.tabs.create({
-                    url: `/${tool}/index.html` + (query ? "?" + query : ''),
+                    url: tool ?  `/${tool}/index.html` + (query ? "?" + query : '') : `/tabs/${page}.html` + (query ? "?" + query : ''),
                     active: true
                 }).then(tab => { FeJson[tab.id] = { content: withContent }; });
             } else {
@@ -82,35 +83,6 @@ chrome.DynamicToolRunner = async function (configs) {
                 });
             }
         })
-        // Settings.getOptions((opts) => {
-        //     let isOpened = false;
-        //     let tabId;
-        //
-        //     // 允许在新窗口打开
-        //     if (String(opts['FORBID_OPEN_IN_NEW_TAB']) === 'true') {
-        //         let reg = new RegExp("^chrome.*\\/" + tool + "\\/index.html" + (query ? "\\?" + query : '') + "$", "i");
-        //         for (let i = 0, len = tabs.length; i < len; i++) {
-        //             if (reg.test(tabs[i].url)) {
-        //                 isOpened = true;
-        //                 tabId = tabs[i].id;
-        //                 break;
-        //             }
-        //         }
-        //     }
-        //
-        //     if (!isOpened) {
-        //         chrome.tabs.create({
-        //             url: `/${tool}/index.html` + (query ? "?" + query : ''),
-        //             active: true
-        //         }).then(tab => { FeJson[tab.id] = { content: withContent }; });
-        //     } else {
-        //         chrome.tabs.update(tabId, {highlighted: true}).then(tab => {
-        //             FeJson[tab.id] = { content: withContent };
-        //             chrome.tabs.reload(tabId);
-        //         });
-        //     }
-        //
-        // });
 
     });
 };
@@ -224,7 +196,7 @@ let _updateBrowserAction = function (action, showTips, menuOnly) {
                 // 删除popup page
               chrome.action.setPopup({ popup: '' });
                chrome.action.onClicked.addListener(()=>{
-                 chrome.tabs.create({ url:setting.optionsDefault.DEV_REQUEST_URL});
+                 chrome.tabs.create({ url:'https://'+setting.optionsDefault.DEV_REQUEST_URL});
                });
             }
         });
@@ -280,16 +252,11 @@ let _prepareInject = function (params) {
         // 遍历出需要注入的 插件
         let url = params.url;
         Object.keys(tools).forEach(toolName => {
-            //? 判断是否需要注入js
-            if (tools[toolName].contentScriptJs && tools[toolName].installed ) {
+            //? 判断是否需要注入js 和 css
+            if (tools[toolName].contentScriptJs && tools[toolName].installed || tools[toolName].contentScriptCss && tools[toolName].installed ) {
                 const tool = tools[toolName];
-                devTool.syncInjectScript(params.tabId,url,tool)
+                devTool.syncInjectScript(params.tabId,url,tool,toolName)
             }
-            //? 判断是否需要注入css
-            // if (tools[toolName].contentScriptCss && tools[toolName].installed ) {
-            //     needInjectToolsCSS[toolName] = tools[toolName];
-            // }
-
         })
     })
 }
@@ -335,6 +302,10 @@ const _sendRequestFetch=(url,request={method:'GET',data:null,headers:new Headers
  * @private
  */
 let _animateTips = (tips) => {
+        if (tips === '0') {
+            chrome.action.setBadgeText({text: ''});
+            return;
+        }
         chrome.action.setBadgeText({text: tips});
         tips = parseInt(tips);
         if (tips <= 2) {
@@ -392,7 +363,7 @@ let _addScreenShotByPages = function () {
                 suggest(arr);
             } else if (/1024/.test(text)){
                 suggest([
-                    {content: 'www.navai.vip', description:'尊享ai导航'},
+                    {content: 'https://www.navai.vip', description:'尊享ai导航'},
                     { content: 'https://www.colamanga.com/', description: 'one漫画' },
                     { content: 'https://metaso.cn/', description: '秘塔搜索' },
                 ]);
@@ -417,26 +388,7 @@ let _addScreenShotByPages = function () {
     });
     //当用户选择搜索建议时，触发onInputEntered事件
     chrome.omnibox.onInputEntered.addListener((text) => {
-        // Encode user input for special characters , / ? : @ & = + $ #
-        // const newURL = 'https://www.navai.vip/search?q=' + encodeURIComponent(text);
-        // chrome.tabs.create({ url: newURL+'#q='+text });
-        console.log('用户输入的搜索内容：', text);
-        if (text === 'bookmarks') {
-            // 提供关于浏览器书签的搜索建议
-            suggest([
-                { content: '特定书签1', description: '描述1' },
-                { content: '特定书签2', description: '描述2' }
-            ]);
-        } else if (text === 'history') {
-            // 提供关于浏览器历史记录的搜索建议
-            suggest([
-                { content: '特定历史记录1', description: '描述1' },
-                { content: '特定历史记录2', description: '描述2' }
-            ]);
-        } else if (text === 'newtab') {
-            // 执行在新标签页中进行搜索的操作
-            // ...
-        }
+        chrome.tabs.create({ url: text });
     });
 }
 
@@ -503,19 +455,18 @@ let _addExtensionListener = function () {
                 break;
             // 截屏
             case 'CAPTURE_VISIBLE_PAGE':
-                console.log('触犯截屏事件1111111111111111111111111111111111111')
                 _captureVisibleTab(callback);
                 break;
-            // 打开其他页面
-            case MSG_TYPE.OPEN_PAGE:
-                chrome.DynamicToolRunner({
-                    tool: request.page
-                });
-                callback && callback();
-                break;
             // 任何事件，都可以通过这个钩子来完成
-            case MSG_TYPE.DYNAMIC_ANY_THING:
+            case setting.optionsDefault.DYNAMIC_ANY_THING:
                 switch(request.thing){
+                    case 'videoDownload':
+                        _sendRequestFetch(request.params.url,request.params.options).then(data => {
+                            console.log('----------videoDownload background 获取到值-------------',data)
+                            callback && callback(data);
+                           return true;
+                        })
+                        return true;
                     case 'save-options':
                         notifyText({
                             message: '配置修改已生效，请继续使用!',
@@ -556,7 +507,7 @@ let _addExtensionListener = function () {
                     case 'qr-decode':
                         chrome.DynamicToolRunner({
                             withContent: request.params.uri,
-                            tool: 'qr-code',
+                            page: 'qr-code',
                             query: `mode=decode`
                         });
                         break;
@@ -604,6 +555,7 @@ let _addExtensionListener = function () {
             if(/^(http(s)?|file):\/\//.test(tab.url) && blacklist.every(reg => !reg.test(tab.url))){
                 console.log('动态注入脚本==================',tabId,changeInfo,tab)
                 _prepareInject({tabId,url:tab.url})
+
             }
 
 

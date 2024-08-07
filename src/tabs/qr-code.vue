@@ -10,7 +10,7 @@
                 :src="'/'+icons[32]"
             />
             <n-gradient-text type="info" class="height-title">
-              生成|解码二维码
+              {{qrEncodeMode? '生成' : '解码'}}二维码
             </n-gradient-text>
           </div>
         </n-flex>
@@ -26,16 +26,25 @@
                   v-model:icon-src="thumbnailUrl"
                   :background-color="qrBgColor"
                   :size="size"
+                  v-if="qrEncodeMode"
               />
+              <div id="qr-code"  v-else>
+
+              </div>
+<!--              <n-avatar-->
+<!--                  v-else-->
+<!--                  id="qr-code"-->
+<!--                  :src="qrcodeDecodeUrl"-->
+<!--              />-->
             </n-flex>
           </template>
           <template #2>
             <n-flex vertical align="center" justify="center" style="margin-top: 10px;margin-left: 20px;margin-right: 20px;">
               <n-input v-model:value="qrcode" autofocus  type="textarea" />
               <div class="btn-group">
-                <n-input-number v-model:value="size" />
-                <n-color-picker v-model:value="color" style="width:33.3%" />
-                <n-color-picker v-model:value="qrBgColor" style="width:33.3%" />
+                <n-input-number v-model:value="size"  :disabled="!qrEncodeMode" />
+                <n-color-picker v-model:value="color"   :disabled="!qrEncodeMode" style="width:33.3%" />
+                <n-color-picker v-model:value="qrBgColor"  :disabled="!qrEncodeMode" style="width:33.3%" />
                 <n-button @click="handleDownloadQRCode">
                   下载
                 </n-button>
@@ -45,6 +54,7 @@
                   @before-upload="beforeUpload"
                   @remove="handleRemove"
                   style="text-align: center;"
+                  :disabled="!qrEncodeMode"
                   :create-thumbnail-url="createThumbnailUrl"
               >
                 <n-button>上传文件</n-button>
@@ -65,8 +75,9 @@
 
 </template>
 <script lang="ts">
-import {defineComponent, reactive, ref} from 'vue'
+import {defineComponent, reactive, ref,watch} from 'vue'
 import setting from '../options/setting'
+import jsQR from "jsqr";
 import {
   NColorPicker,
   NQrCode, NInputNumber,
@@ -101,6 +112,38 @@ export default defineComponent({
     const qrcode = ref(`https://${setting.optionsDefault.DEV_REQUEST_URL}`);
     const {message} = createDiscreteApi(["message"])
     const qrBgColor = ref('#F5F5F5')
+    const qrEncodeMode = ref(true)
+    const qrcodeDecodeUrl = ref('')
+
+    //! 数据初始化 获取 点击menu 传过来的数据
+    let mode = new URL(location.href).searchParams.get('mode');
+    qrEncodeMode.value = mode !== 'decode';
+
+    chrome.tabs.query({currentWindow: true,active: true, }, (tabs) => {
+      let activeTab = tabs.filter(tab => tab.active)[0];
+      chrome.runtime.sendMessage({
+        type: 'fh-dynamic-any-thing',
+        thing: 'request-page-content',
+        tabId: activeTab.id
+      }).then(resp => {
+        console.log('获取页面内容',resp)
+        console.log('解码',qrcodeDecodeUrl.value)
+        if(!resp) return ;
+        let text = resp.content || (resp.tab ? (resp.tab.fromTab ? resp.tab.fromTab.url : '') : '');
+        if (text) {
+
+          if (qrEncodeMode.value){
+            // 转为二维码
+            qrcode.value = text
+          }else{
+            // 解码
+            decodeQRCode(text)
+            qrcode.value = text
+          }
+
+        }
+      });
+    });
     //! 下载二维码
     const handleDownloadQRCode = () => {
       const canvas = document
@@ -186,6 +229,58 @@ export default defineComponent({
      thumbnailUrl.value = ''
      console.log(thumbnailUrl.value, '移除上传文件')
    }
+
+   //! 解码
+   const decodeQRCode = (url) => {
+      console.log('解码1',url)
+     const img = new Image()
+     img.src = url
+     img.onload = () => {
+       const canvas = document.createElement('canvas')
+       const ctx = canvas.getContext('2d')
+       const maxSize = 100
+       let width = img.width
+       let height = img.height
+       if (width > height) {
+         if (width > maxSize) {
+           height *= maxSize / width
+           width = maxSize
+         }
+       } else {
+         if (height > maxSize) {
+           width *= maxSize / height
+           height = maxSize
+         }
+       }
+       canvas.width = width
+       canvas.height = height
+       ctx.fillStyle = qrBgColor.value; // 设置为白色
+       ctx.fillRect(0, 0, width, height);
+       // 先绘制原始图像 才能得到正确的二维码数据
+       ctx.drawImage(img, 0, 0, width, height)
+
+       // 使用 jsQR 库识别二维码
+       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+       console.log('解码',imageData)
+       const code = jsQR(imageData.data, imageData.width, imageData.height);
+       if (code) {
+         qrcode.value = code.data
+         message.success(`识别成功：${code.data}`)
+
+         console.log('解码',code.data)
+       } else {
+         message.error('未识别到二维码')
+       }
+
+       // 绘制图片
+       document.querySelector('#qr-code').appendChild(canvas);
+       console.log('解码2',url,canvas)
+     }
+     img.onerror = () => {
+       qrcodeDecodeUrl.value = url
+     }
+
+   }
     return {
       color,
       qrBgColor,
@@ -196,7 +291,9 @@ export default defineComponent({
       thumbnailUrl,
       createThumbnailUrl,
       beforeUpload,
-      handleRemove
+      handleRemove,
+      qrEncodeMode,
+      qrcodeDecodeUrl
     }
   }
 })

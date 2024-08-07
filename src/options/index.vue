@@ -7,7 +7,7 @@
             <n-avatar
                 round
                 size="small"
-                src="https://07akioni.oss-cn-beijing.aliyuncs.com/07akioni.jpeg"
+                :src="manifest.icons[16]"
             />
             <n-gradient-text type="info" class="height-title">
               配置页面
@@ -113,7 +113,7 @@ export default defineComponent({
     const appList = reactive({})
     const plugList = reactive({})
     const manifest = reactive({});
-    const tabsValue = ref('basic-config');
+    const tabsValue = ref('add-plug');
     //! 获取当前ctx的version
     const basemanifest = chrome.runtime.getManifest();
     Object.keys(basemanifest).forEach(tool => {

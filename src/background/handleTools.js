@@ -114,8 +114,10 @@ export const tool = (()=>{
 
     // 初始化工具配置
     const init = () => {
-        storage().set(setting.optionsDefault.DEV_TOOL_MAP, JSON.stringify(toolMap))
-        console.log('%c 初始化工具配置', "color: #000000; font-weight: bold;",toolMap)
+        storage().clear().then(()=>{
+            storage().set(setting.optionsDefault.DEV_TOOL_MAP, JSON.stringify(toolMap))
+            console.log('%c 初始化工具配置', "color: #000000; font-weight: bold;",toolMap)
+        })
     }
     return{
         getAllTools: _getAllTools,
@@ -189,6 +191,7 @@ export const menu = (() => {
             icon: '♽',
             text: '插件下载分享',
             onClick: function (info, tab) {
+                console.log('下载插件' , info, tab);
                 CrxDownloader.downloadCrx(tab);
             }
         },
@@ -203,6 +206,7 @@ export const menu = (() => {
             icon: '🧩',
             text: '截图当前页面',
             onClick: function (info, tab) {
+                console.log('截图当前页面' , info, tab);
                 chrome.tabs.captureVisibleTab(null, {format: 'png', quality: 100}, dataUrl => {
                     // 下载图像
                     chrome.downloads.download({
@@ -215,7 +219,12 @@ export const menu = (() => {
         }
     }
 
-    // 初始化菜单配置
+    /**
+     * 初始化菜单配置
+     * 由于 json.stringify 不能处理函数，因此需要在这里重新定义菜单配置 配置onClick 事件
+     * @private
+     */
+
     let _initMenuOptions = (() => {
 
         Object.keys(toolMap).forEach(tool => {
@@ -247,32 +256,42 @@ export const menu = (() => {
 
                 case 'qr-code':
                     toolMap[tool].menuConfig[0].onClick = function (info, tab) {
+                        console.log('二维码生成==================2', info, tab);
                         chrome.scripting.executeScript({
                             target: {tabId:tab.id,allFrames:false},
                             args: [info.linkUrl || info.srcUrl || info.selectionText || info.pageUrl || tab.url || ''],
                             func: (text) => text
                         }, resp => chrome.DynamicToolRunner({
-                            tool, withContent: resp[0].result
+                            withContent: resp[0].result,page:tool
                         }));
                     };
                     toolMap[tool].menuConfig[1].onClick = function (info, tab) {
+                        console.log('二维码识别=', info, tab);
                         chrome.scripting.executeScript({
                             target: {tabId:tab.id,allFrames:false},
                             args: [info.srcUrl || ''],
-                            func: (text) => {
-                                try {
-                                    if (typeof window.qrcodeContentScript === 'function') {
-                                        let qrcode = window.qrcodeContentScript();
-                                        if (typeof qrcode.decode === 'function') {
-                                            qrcode.decode(text);
-                                            return 1;
-                                        }
-                                    }
-                                } catch (e) {
-                                    return 0;
-                                }
-                            }
-                        });
+                            func: (text) => text
+                        }, resp => chrome.DynamicToolRunner({
+                            withContent: resp[0].result,page:tool,query: `mode=decode`
+                        }));
+                        // chrome.scripting.executeScript({
+                        //     target: {tabId:tab.id,allFrames:false},
+                        //     args: [info.srcUrl || ''],
+                        //     func: (text) => {
+                        //         try {
+                        //             console.log('判断是否 有window.qrcodeContentScript',window.qrcodeContentScript)
+                        //             if (typeof window.qrcodeContentScript === 'function') {
+                        //                 let qrcode = window.qrcodeContentScript();
+                        //                 if (typeof qrcode.decode === 'function') {
+                        //                     qrcode.decode(text);
+                        //                     return 1;
+                        //                 }
+                        //             }
+                        //         } catch (e) {
+                        //             return 0;
+                        //         }
+                        //     }
+                        // });
                     };
                     break;
 
@@ -296,7 +315,11 @@ export const menu = (() => {
      * @private
      */
     let _createItem = (toolName, menuList) => {
-        menuList && menuList.forEach && menuList.forEach(menu => {
+        menuList && menuList.forEach && menuList.forEach((menu, index) => {
+            //这里需要确认一下，本地的toolMap 是否存在onClick 事件，如果存在就用本地的，否则用默认的，因为内存中的json.stringify 不能处理函数
+            if (toolMap[toolName] && toolMap[toolName].menuConfig && toolMap[toolName].menuConfig[index]){
+                menu.onClick = toolMap[toolName].menuConfig[index]?.onClick;
+            }
 
             // 确保每次创建出来的是一个新的主菜单，防止onClick事件冲突
             let menuItemId = 'fhm_c' + escape(menu.text).replace(/\W/g,'') + new Date*1;
@@ -308,11 +331,13 @@ export const menu = (() => {
                 parentId: FeJson.contextMenuId
             });
 
-            chrome.contextMenus.onClicked.addListener(((tool,mId,mFunc) => (info, tab) => {
+            chrome.contextMenus.onClicked.addListener(((tool,mId,mFunc,menu) => (info, tab) => {
                 if(info.menuItemId === mId) {
                     if(mFunc) {
+                        console.log('执行菜单点击事件1----------1', tool, mId, mFunc, info, tab);
                         mFunc(info,tab);
                     }else{
+                        console.log('执行菜单点击事件2----------2', tool, mId, menu);
                         chrome.DynamicToolRunner({ tool });
                     }
                 }
@@ -352,12 +377,11 @@ export const menu = (() => {
                let onlineMenus = allMenus.filter(tool =>  value[tool].hasOwnProperty('systemInstalled') && value[tool].systemInstalled && value[tool].installed && value[tool].menu);
                 // 开发的菜单，放在后面
                let devToolsMenus = allMenus.filter(tool => value[tool].hasOwnProperty('_devTool') && value[tool]._devTool && !value[tool].systemInstalled  && value[tool].installed && value[tool].menu);
-
-                // 绘制FH提供的工具菜单
+                // 预装的工具的菜单
                 onlineMenus.forEach(tool => _createItem(tool, value[tool].menuConfig));
                 // 如果有本地工具的菜单需要绘制，则需要加一条分割线
                 devToolsMenus.length && _createSeparator();
-                // 绘制本地工具的菜单
+                // 本地开发的工具的菜单
                 devToolsMenus.forEach(tool => _createItem(tool, value[tool].menuConfig));
             })
 
@@ -454,16 +478,19 @@ export const devTool = (() => {
         try {
             const tools = await storage().get(setting.optionsDefault.DEV_TOOL_MAP)
             const localTools = JSON.parse(tools || "{}")
-            Object.keys(toolMap).forEach(key=>{
+            Object.keys(toolMap).some(key=>{
                 if (key  === toolName && localTools[key].hasOwnProperty('type') && localTools[key].type === 'plug' ){
                     if (Object.prototype.toString.call(data)  === '[object Object]' && ('id' in data)){
+                        console.log('%c 更新本地开发的插件 应用的代码4', "color: skyblue; font-weight: bold;",data)
                         localTools[data.id] = localTools[key]
                         localTools[data.id] = Object.assign(localTools[data.id],data)
-                        delete localTools[key]
                     }
+                    return true;
                 }else{
-                    if (key != undefined && key != null){
-                        localTools[toolName] = data
+                    if (key !== undefined && key !== null){
+                        console.log('卸载',data)
+                        localTools[toolName] = Object.assign(localTools[toolName],data)
+                        return true;
                     }
                 }
             })
@@ -492,33 +519,65 @@ export const devTool = (() => {
         }
     }
 
-    // 同步 动态注入脚本
-    // 用于创建时 同步脚本 到页面
-    const syncInjectScript =  (tabId,url,tool)=>{
+    /**
+     *     // 同步 动态注入脚本
+     *     // 用于创建时 同步脚本 到页面
+     *
+     * @param tabId 页面id
+     * @param url 页面url
+     * @param tool 插件信息
+     * @param toolName 插件名称
+     */
+    const syncInjectScript =  (tabId,url,tool,toolName)=>{
         if (tool.hasOwnProperty('devToolMap') && tool.devToolMap.hasOwnProperty('MPattern') && tool.devToolMap.MPattern.length > 0){
-            tool.devToolMap.MPattern.find(pattern => {
+            tool.devToolMap.MPattern.some(pattern => {
+
+                // 将通配符自动转换为正则表达式模式
                 const regex = new RegExp(pattern)
                 const isMatch = regex.test(url)
+                console.log('%c 同步 动态注入脚本-------------', "color: #f26783; font-weight: bold;",toolName,isMatch,url,pattern,regex)
                 if (isMatch) {
                     //循环导入所有js or css
                     tool.devToolMap.MScript.forEach(script => {
                         const mRefresh = tool.devToolMap.MRefresh
+                        //? 1. 判断是否是js文件
                         if (script.filename.indexOf('.js') > -1){
-                            let js = `${script.content};
+                            //? 2. 判断是否需要导入js
+                            if (tool.contentScriptJs && tool.installed ){
+                                //? 3. 导入js文件  还是 js 代码
+                                console.log('进入 同步 动态注入脚本- js注入的方式',script.content)
+                                //status = 1 表示通过文件的方式加载脚本，status = 0 表示通过代码的方式加载脚本 2 表示通过文件 和 代码的方式加载脚本
+                                if (script.status === 2){
+                                    const js = `${script.content}`
+                                    js && inject(tabId,{js,files:[`static/${toolName}/${script.filename}`]})
+
+                                }else if (script.status === 1){
+                                    console.log('进入 同步 动态注入脚本------------- 文件注入的方式')
+                                    inject(tabId,{files:[`static/${toolName}/${script.filename}`]})
+                                }else{
+                                    let js = `${script.content};
                                      parseInt(${mRefresh}) && setTimeout(() => {
                                                 location.reload(true);
                                             }, parseInt(${mRefresh}) )`
-                            inject(tabId,{js})
+                                    inject(tabId,{js})
+                                }
+
+                            }
                         } else if (script.filename.indexOf('.css') > -1){
                             if (tool.contentScriptCss && tool.installed ){
-                                let css = script.content
-                                inject(tabId,{css})
+                                if (script.content){
+                                    let css = script.content
+                                    inject(tabId,{css})
+                                }else{
+                                    inject(tabId,{files:[`static/${toolName}/${script.filename}`]})
+                                }
+
                             }
 
                         }
 
                     })
-
+                    return true; // 匹配到第一个就退出循环
                 }
             });
         }

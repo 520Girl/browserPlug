@@ -30,6 +30,10 @@ export function  storage(){
     const _removeStorage = async(key)=>{
         return await storageDefult.remove(key)
     }
+    //删除所有本地存储
+    const _clearStorage = async()=>{
+        return await storageDefult.clear()
+    }
     // 获取所有本地存储
     const _getAllStorage = async()=>{
         return await storageDefult.getAll()
@@ -39,107 +43,108 @@ export function  storage(){
         get: _getStorage,
         set: _setStorage,
         remove: _removeStorage,
+        clear: _clearStorage,
         getAll: _getAllStorage
     }
 }
 
 
-
-/**
- * 右键菜单工具
- */
-export const menu=(()=>{
-    // 默认右键菜单
-    const defaultMenu = {
-        'download_crx': {
-            icon: '♥',
-            text: '插件下载分享',
-            onClick: function (info, tab) {
-                CrxDownloader.downloadCrx(tab);
-            }
-        },
-        'fehelper_setting': {
-            icon: '❂',
-            text: 'FeHelper设置',
-            onClick: function (info, tab) {
-                chrome.runtime.openOptionsPage();
-            }
-        }
-    };
-
-    // 初始化菜单配置
-    let _initMenuOptions = () => {
-        Object.keys(toolMap).forEach(tool => {
-            // context-menu
-            switch (tool) {
-                case 'json-format':
-                    toolMap[tool].menuConfig[0].onClick = function (info, tab) {
-                        chrome.scripting.executeScript({
-                            target: {tabId:tab.id,allFrames:false},
-                            args: [info.selectionText || ''],
-                            func: (text) => text
-                        }, resp => chrome.DynamicToolRunner({
-                            tool, withContent: resp[0].result
-                        }));
-                    };
-                    break;
-
-                case 'code-beautify':
-                case 'en-decode':
-                    toolMap[tool].menuConfig[0].onClick = function (info, tab) {
-                        chrome.scripting.executeScript({
-                            target: {tabId:tab.id,allFrames:false},
-                            args: [info.linkUrl || info.srcUrl || info.selectionText || info.pageUrl || ''],
-                            func: (text) => text
-                        }, resp => chrome.DynamicToolRunner({
-                            tool, withContent: resp[0].result
-                        }));
-                    };
-                    break;
-
-                case 'qr-code':
-                    toolMap[tool].menuConfig[0].onClick = function (info, tab) {
-                        chrome.scripting.executeScript({
-                            target: {tabId:tab.id,allFrames:false},
-                            args: [info.linkUrl || info.srcUrl || info.selectionText || info.pageUrl || tab.url || ''],
-                            func: (text) => text
-                        }, resp => chrome.DynamicToolRunner({
-                            tool, withContent: resp[0].result
-                        }));
-                    };
-                    toolMap[tool].menuConfig[1].onClick = function (info, tab) {
-                        chrome.scripting.executeScript({
-                            target: {tabId:tab.id,allFrames:false},
-                            args: [info.srcUrl || ''],
-                            func: (text) => {
-                                try {
-                                    if (typeof window.qrcodeContentScript === 'function') {
-                                        let qrcode = window.qrcodeContentScript();
-                                        if (typeof qrcode.decode === 'function') {
-                                            qrcode.decode(text);
-                                            return 1;
-                                        }
-                                    }
-                                } catch (e) {
-                                    return 0;
-                                }
-                            }
-                        });
-                    };
-                    break;
-
-                default:
-                    toolMap[tool].menuConfig[0].onClick = function (info, tab) {
-                        chrome.DynamicToolRunner({
-                            tool, withContent: tool === 'image-base64' ? info.srcUrl : ''
-                        })
-                    };
-                    break;
-            }
-        });
-    };
-
-    return{
-        init: _initMenuOptions,
-    }
-})()
+//
+// /**
+//  * 右键菜单工具
+//  */
+// export const menu=(()=>{
+//     // 默认右键菜单
+//     const defaultMenu = {
+//         'download_crx': {
+//             icon: '♥',
+//             text: '插件下载分享',
+//             onClick: function (info, tab) {
+//                 CrxDownloader.downloadCrx(tab);
+//             }
+//         },
+//         'fehelper_setting': {
+//             icon: '❂',
+//             text: 'FeHelper设置',
+//             onClick: function (info, tab) {
+//                 chrome.runtime.openOptionsPage();
+//             }
+//         }
+//     };
+//
+//     // 初始化菜单配置
+//     let _initMenuOptions = () => {
+//         Object.keys(toolMap).forEach(tool => {
+//             // context-menu
+//             switch (tool) {
+//                 case 'json-format':
+//                     toolMap[tool].menuConfig[0].onClick = function (info, tab) {
+//                         chrome.scripting.executeScript({
+//                             target: {tabId:tab.id,allFrames:false},
+//                             args: [info.selectionText || ''],
+//                             func: (text) => text
+//                         }, resp => chrome.DynamicToolRunner({
+//                             tool, withContent: resp[0].result
+//                         }));
+//                     };
+//                     break;
+//
+//                 case 'code-beautify':
+//                 case 'en-decode':
+//                     toolMap[tool].menuConfig[0].onClick = function (info, tab) {
+//                         chrome.scripting.executeScript({
+//                             target: {tabId:tab.id,allFrames:false},
+//                             args: [info.linkUrl || info.srcUrl || info.selectionText || info.pageUrl || ''],
+//                             func: (text) => text
+//                         }, resp => chrome.DynamicToolRunner({
+//                             tool, withContent: resp[0].result
+//                         }));
+//                     };
+//                     break;
+//
+//                 case 'qr-code':
+//                     toolMap[tool].menuConfig[0].onClick = function (info, tab) {
+//                         chrome.scripting.executeScript({
+//                             target: {tabId:tab.id,allFrames:false},
+//                             args: [info.linkUrl || info.srcUrl || info.selectionText || info.pageUrl || tab.url || ''],
+//                             func: (text) => text
+//                         }, resp => chrome.DynamicToolRunner({
+//                             tool, withContent: resp[0].result
+//                         }));
+//                     };
+//                     toolMap[tool].menuConfig[1].onClick = function (info, tab) {
+//                         chrome.scripting.executeScript({
+//                             target: {tabId:tab.id,allFrames:false},
+//                             args: [info.srcUrl || ''],
+//                             func: (text) => {
+//                                 try {
+//                                     if (typeof window.qrcodeContentScript === 'function') {
+//                                         let qrcode = window.qrcodeContentScript();
+//                                         if (typeof qrcode.decode === 'function') {
+//                                             qrcode.decode(text);
+//                                             return 1;
+//                                         }
+//                                     }
+//                                 } catch (e) {
+//                                     return 0;
+//                                 }
+//                             }
+//                         });
+//                     };
+//                     break;
+//
+//                 default:
+//                     toolMap[tool].menuConfig[0].onClick = function (info, tab) {
+//                         chrome.DynamicToolRunner({
+//                             tool, withContent: tool === 'image-base64' ? info.srcUrl : ''
+//                         })
+//                     };
+//                     break;
+//             }
+//         });
+//     };
+//
+//     return{
+//         init: _initMenuOptions,
+//     }
+// })()
